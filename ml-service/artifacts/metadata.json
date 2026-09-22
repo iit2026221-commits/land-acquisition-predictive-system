@@ -1,0 +1,51 @@
+{
+  "model_version": "1.0.0",
+  "model_type": "logistic-regression + random-forest-regressor",
+  "feature_version": "features-v1",
+  "trained_at": "2026-09-18T20:45:18.409024+00:00",
+  "dataset": {
+    "label": "synthetic",
+    "rows": 200,
+    "random_state": 42
+  },
+  "features": [
+    "state_id",
+    "district_id",
+    "project_type",
+    "land_area",
+    "affected_families",
+    "acquisition_stage"
+  ],
+  "metrics": {
+    "classification": {
+      "accuracy": 0.85,
+      "precision": 0.8182,
+      "recall": 0.9,
+      "f1": 0.8571,
+      "roc_auc": 0.8775,
+      "confusion_matrix": [
+        [
+          16,
+          4
+        ],
+        [
+          2,
+          18
+        ]
+      ]
+    },
+    "regression": {
+      "mae": 1.379,
+      "rmse": 1.8047,
+      "r2": 0.6705
+    }
+  },
+  "target_definition": {
+    "name": "SIGNIFICANT_DELAY",
+    "threshold_months": 5.0
+  },
+  "artifacts": [
+    "classification.joblib",
+    "regression.joblib"
+  ]
+}

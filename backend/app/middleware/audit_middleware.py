@@ -1,0 +1,2 @@
+"""Audit middleware boundary."""
+

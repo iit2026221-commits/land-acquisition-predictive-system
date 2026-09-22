@@ -1,0 +1,62 @@
+import { useEffect, useState } from 'react'
+import { Card } from '../components/ui/Card'
+import { RiskBadge } from '../components/ui/Badge'
+import { ErrorState, LoadingState } from '../components/ui/States'
+import { getProjectById } from '../services/projectService'
+import { getRiskAssessment } from '../services/riskService'
+import { requestPrediction } from '../services/predictionService'
+import type { PredictionResult, Project } from '../types'
+import { generateRecommendations, type Recommendation, type RecommendationPriority } from '../recommendationEngine'
+
+function DetailRow({ label, value }: { label: string; value: string | number | undefined }) {
+  return <div className="detail-row"><span>{label}</span><strong>{value === undefined || value === '' ? 'Not recorded' : value}</strong></div>
+}
+
+function ExplainabilityCard({ prediction }: { prediction: PredictionResult | null }) {
+  if (!prediction?.explanation) return null
+  const explanation = prediction.explanation
+  const [selectedFeature, setSelectedFeature] = useState<string | null>(null)
+  const selected = explanation.drivers.find(driver => driver.feature === selectedFeature)
+  return <Card className="detail-section explanation-card"><div className="section-heading"><div><p className="eyebrow">Part 7 · Explainable AI</p><h2>Why did the model predict this?</h2></div><span className="demo-label">LOCAL EXPLANATION</span></div><p className="explanation-summary">{explanation.summary}</p><div className="driver-list">{explanation.topDrivers.map(driver => <button className="driver-row" key={driver.feature} onClick={() => setSelectedFeature(driver.feature)} title={`Inspect why ${driver.label} contributed to this prediction.`}><span><strong>{driver.label}</strong><small>Recorded value: {driver.value}</small></span><span className={`driver-impact ${driver.direction}`}><b>{driver.contribution > 0 ? '+' : ''}{driver.contribution.toFixed(3)}</b><small>{driver.impact}</small></span><i style={{ width: `${Math.min(Math.abs(driver.contribution) * 100, 100)}%` }} /></button>)}</div>{selected && <div className="driver-detail"><strong>{selected.label}</strong><p>The recorded value <b>{selected.value}</b> {selected.impact} for this project.</p><small>Contribution: {selected.contribution.toFixed(3)} · Feature: {selected.feature}</small></div>}<p className="explanation-method">Contributions are calculated from the trained classifier using {explanation.metadata.method}. Contribution indicates association with the model output, not causation.</p><p className="muted">Model {explanation.metadata.modelVersion ?? prediction.modelVersion} · Feature pipeline {explanation.metadata.featureVersion ?? 'not reported'} · Generated {new Date(prediction.generatedAt).toLocaleString()}</p></Card>
+}
+
+const priorityClass = (priority: RecommendationPriority) => `recommendation-priority ${priority.toLowerCase()}`
+
+function DecisionSupportCard({ project, assessment, prediction }: { project: Project; assessment: ReturnType<typeof getRiskAssessment>; prediction: PredictionResult | null }) {
+  const result = generateRecommendations({ project, riskAssessment: assessment, prediction: prediction ?? undefined })
+  const primary = result.recommendations[0]
+  return <Card className="detail-section decision-support-card">
+    <div className="section-heading"><div><p className="eyebrow">Part 8 · Decision support</p><h2>Evidence-based interventions</h2></div><span className="demo-label">{result.engineVersion}</span></div>
+    <p className="decision-support-intro">Human decision-makers retain authority. These project-specific options connect observed risk conditions to reviewable intervention areas.</p>
+    {result.stale && <div className="notice warning">Recommendations may be outdated because one or more source records are stale. Refresh the project assessment before relying on them.</div>}
+    {!primary ? <div className="decision-empty"><strong>No action recommendation generated</strong><span>Current risk dimensions do not identify a problematic condition. Continue routine monitoring and keep project data current.</span></div> : <><div className="decision-summary"><div><span>Primary bottleneck</span><strong>{primary.category.replace('_', ' ')}</strong></div><div><span>Immediate priority</span><strong className={priorityClass(primary.priority)}>{primary.priority}</strong></div><div><span>Actions identified</span><strong>{result.recommendations.length}</strong></div></div><div className="recommendation-list">{result.recommendations.map((recommendation: Recommendation) => <details className="recommendation-card" key={recommendation.id} open={recommendation.id === primary.id}><summary><span className={priorityClass(recommendation.priority)}>{recommendation.priority}</span><span><strong>{recommendation.title}</strong><small>{recommendation.category.replace('_', ' ')} · {recommendation.responsibleArea}</small></span></summary><div className="recommendation-body"><p><b>Trigger:</b> {recommendation.trigger}</p><p>{recommendation.rationale}</p><div className="recommendation-meta"><span><b>Urgency / status</b>{recommendation.urgency} · {recommendation.status}</span><span><b>Suggested timeframe</b>{recommendation.timeframe}</span><span><b>Expected objective</b>{recommendation.expectedObjective}</span></div><div className="recommendation-evidence"><b>Why this recommendation?</b><ul>{recommendation.evidence.map((evidence) => <li key={evidence}>{evidence}</li>)}</ul></div><small className="muted">Rule {recommendation.audit.ruleId} · {recommendation.stale ? 'Stale source' : 'Current source'} · {recommendation.audit.engineVersion}</small></div></details>)}</div></>}
+    <p className="decision-support-disclaimer">Recommendations are deterministic decision-support suggestions, not guaranteed outcomes or automatic instructions.</p>
+  </Card>
+}
+
+export function ProjectDetailsPage({ id, onNavigate }: { id: string; onNavigate: (path: string) => void }) {
+  const [project, setProject] = useState<Project | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [prediction, setPrediction] = useState<PredictionResult | null>(null)
+  const [predictionLoading, setPredictionLoading] = useState(false)
+  const [predictionError, setPredictionError] = useState('')
+  useEffect(() => { getProjectById(id).then(value => { setProject(value ?? null); setLoading(false) }) }, [id])
+  if (loading) return <div className="page"><LoadingState label="Loading project record" /></div>
+  if (!project) return <div className="page"><ErrorState message="This project ID does not exist in the demonstration project service." /></div>
+  const assessment = getRiskAssessment(project)
+  const sections = [
+    ['Land & affected population', [['Total land required', `${project.totalLandRequired ?? project.landArea} hectares`], ['Land acquired', `${project.landAcquired ?? project.landArea} hectares`], ['Affected families', project.affectedFamilies.toLocaleString()], ['Affected persons', project.affectedPersons]]],
+    ['Acquisition progress', [['Current stage', project.acquisitionStage], ['Possession status', project.possessionStatus], ['Possession progress', `${project.possessionPercentage ?? project.possessionProgress}%`], ['Parcels acquired', project.parcelsAcquired]]],
+    ['Documentation & approvals', [['Documentation status', project.documentationStatus], ['Approval status', project.approvalStatus], ['Pending approvals', project.pendingApprovals], ['Responsible department', project.responsibleDepartment]]],
+    ['Compensation', [['Compensation status', project.compensationStatus], ['Approved', project.compensationApproved === undefined ? undefined : `₹${project.compensationApproved.toLocaleString('en-IN')}`], ['Disbursed', project.compensationDisbursed === undefined ? undefined : `₹${project.compensationDisbursed.toLocaleString('en-IN')}`], ['Families compensated', project.familiesCompensated]]],
+    ['Legal & disputes', [['Legal status', project.legalStatus], ['Active disputes', project.legalDisputes], ['Dispute severity', project.disputeSeverity], ['Court cases', project.courtCases]]],
+    ['Rehabilitation & resettlement', [['R&R plan status', project.rrPlanStatus], ['Families requiring R&R', project.rrFamilies], ['Families covered', project.rrFamiliesCovered], ['Rehabilitation progress', project.rehabilitationProgress === undefined ? undefined : `${project.rehabilitationProgress}%`]]],
+    ['Timeline', [['Planned start', project.plannedStart], ['Planned completion', project.plannedCompletion], ['Expected completion', project.currentExpectedCompletion], ['Current bottleneck', project.currentBottleneck]]],
+  ] as [string, [string, string | number | undefined][]][]
+  const runPrediction = () => {
+    setPredictionLoading(true)
+    setPredictionError('')
+    requestPrediction(project).then(setPrediction).catch(error => setPredictionError(error instanceof Error ? error.message : 'Prediction could not be generated.')).finally(() => setPredictionLoading(false))
+  }
+  return <div className="page project-details-page"><div className="page-heading"><div><div className="title-line"><p className="eyebrow">Project portfolio · Record</p><span className="demo-label">DEMONSTRATION DATA</span></div><h1>{project.name}</h1><p className="page-subtitle">{project.id} · {project.district}, {project.state} · {project.projectType}</p></div><div className="detail-actions"><button className="secondary-button" onClick={() => onNavigate(`/projects/${project.id}/edit`)}>Edit project</button><button className="primary-button" onClick={() => onNavigate('/projects')}>Portfolio</button></div></div><div className="record-header"><div><span>Lifecycle status</span><strong>{project.monitoringStatus ?? 'ACTIVE'}</strong></div><div><span>Acquisition stage</span><strong>{project.acquisitionStage}</strong></div><div><span>Last updated</span><strong>{project.lastUpdated}</strong></div><div><span>Data completeness</span><strong>{project.dataCompleteness ?? 0}%</strong></div><RiskBadge level={assessment.overallLevel} /></div><div className="details-grid">{sections.map(([title, rows]) => <Card className="detail-section" key={title}><h2>{title}</h2>{rows.map(([label, value]) => <DetailRow key={label} label={label} value={value} />)}</Card>)}<Card className="detail-section"><div className="section-heading"><div><p className="eyebrow">Part 5 · Deterministic assessment</p><h2>Risk assessment</h2></div><RiskBadge level={assessment.overallLevel} /></div><div className="assessment-summary"><div><span>Overall assessment</span><strong>{assessment.overallScore === null ? 'Insufficient data' : `${assessment.overallScore}/100`}</strong></div><div><span>Confidence</span><strong>{assessment.confidence}</strong></div></div><p className="assessment-explanation">{assessment.explanation}</p><button className="text-button" onClick={() => onNavigate('/risk')}>Open risk intelligence →</button></Card><Card className="detail-section prediction-card"><div className="section-heading"><div><p className="eyebrow">Part 6 · Machine learning</p><h2>ML delay prediction</h2></div><span className="demo-label">DEVELOPMENT MODEL</span></div>{prediction ? <><div className="prediction-summary"><div><span>Predicted probability of significant delay</span><strong>{Math.round(prediction.delayProbability * 100)}%</strong></div><div><span>Expected delay duration</span><strong>{prediction.predictedDelayMonths.toFixed(1)} months</strong></div><div><span>Predicted risk</span><RiskBadge level={prediction.predictedRiskLevel} /></div></div>  <p className="muted">Model {prediction.modelVersion} · {prediction.dataQuality} data quality · Project record completeness {project.dataCompleteness ?? 'not recorded'}%</p></> : <p className="muted">No current ML prediction exists for this project. Values are never filled with deterministic risk or placeholder numbers.</p>}{predictionError && <p className="error-text">{predictionError}</p>}<button className="secondary-button" onClick={runPrediction} disabled={predictionLoading}>{predictionLoading ? 'Running prediction…' : prediction ? 'Refresh prediction' : 'Run prediction'}</button>  <p className="prediction-disclaimer">Development prediction trained on synthetic data for engineering validation only; not validated for operational government decision-making.</p></Card><ExplainabilityCard prediction={prediction} /><DecisionSupportCard project={project} assessment={assessment} prediction={prediction} /></div></div>
+}

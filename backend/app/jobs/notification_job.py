@@ -1,0 +1,2 @@
+"""Background notification job boundary."""
+

@@ -1,0 +1,2 @@
+"""Land acquisition backend application."""
+

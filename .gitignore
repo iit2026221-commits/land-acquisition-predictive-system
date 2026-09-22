@@ -1,0 +1,21 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.pytest_cache/
+.mypy_cache/
+dist/
+build/
+node_modules/
+*.egg-info/
+backend/uploads/datasets/*
+backend/uploads/documents/*
+backend/uploads/exports/*
+!backend/uploads/**/.gitkeep
+
+
+# Local database
+*.db
+# Environment files
+backend/.env.development
+backend/.env.production

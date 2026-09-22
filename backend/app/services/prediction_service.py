@@ -1,0 +1,2 @@
+"""Prediction business logic boundary."""
+
