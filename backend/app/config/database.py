@@ -11,9 +11,24 @@ class Base(DeclarativeBase):
 
 
 settings = get_settings()
-connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
-engine = create_engine(settings.database_url, connect_args=connect_args)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+connect_args = (
+    {"check_same_thread": False}
+    if settings.database_url.startswith("sqlite")
+    else {}
+)
+
+engine = create_engine(
+    settings.database_url,
+    connect_args=connect_args,
+    pool_pre_ping=True,
+)
+
+SessionLocal = sessionmaker(
+    bind=engine,
+    autoflush=False,
+    autocommit=False,
+)
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -22,4 +37,3 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
-

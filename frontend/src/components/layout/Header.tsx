@@ -2,7 +2,10 @@ import { Icon } from '../ui/Icon'
 import { useEffect, useState } from 'react'
 import { searchProjects } from '../../services/projectService'
 import type { Project } from '../../types'
-import { getAuthSession } from '../../services/authService'
+import {
+  getAuthSession,
+  clearAuthSession,
+} from '../../services/authService'
 
 export function Header({
   onMenu,
@@ -25,7 +28,7 @@ export function Header({
       return
     }
 
-    searchProjects(query).then(setResults)
+    searchProjects(query).then(setResults).catch(() => setResults([]))
   }, [query])
 
   return (
@@ -48,12 +51,10 @@ export function Header({
         <div className="search-wrap">
           <label className="search">
             <Icon name="search" size={17} />
-
             <input
-              aria-label="Search projects, districts…"
               value={query}
-              onChange={event => setQuery(event.target.value)}
-              placeholder="Search projects, districts…"
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search projects..."
             />
           </label>
 
@@ -69,76 +70,62 @@ export function Header({
                 >
                   <strong>{project.name}</strong>
                   <small>
-                    {project.id} · {project.district}, {project.state}
+                    {project.district}, {project.state}
                   </small>
                 </button>
               ))}
-            </div>
-          )}
-
-          {query.trim().length >= 2 && results.length === 0 && (
-            <div className="search-results">
-              <span>No projects found</span>
             </div>
           )}
         </div>
 
         <button
           className="icon-button"
-          aria-label="Toggle theme"
           onClick={onTheme}
         >
           <Icon name={dark ? 'sun' : 'moon'} />
         </button>
 
-        <button
-          className="icon-button notification-button"
-          aria-label="Notifications"
-        >
-          <Icon name="bell" />
-          <span />
-        </button>
-
-        <div className="system-status">
-          <span className="pulse" />
-          Systems operational
-        </div>
-
         {!session ? (
           <button
             className="profile sign-in-button"
             onClick={() => onNavigate('/login')}
-            aria-label="Sign in as administrator"
           >
             <span className="avatar">AD</span>
-
             <span className="profile-text">
               <strong>Administrator</strong>
-              <small>Sign in to run predictions</small>
+              <small>Sign in</small>
             </span>
-
-            <Icon name="chevron" size={14} />
           </button>
         ) : (
-          <button
+          <div
             className="profile"
-            onClick={() => onNavigate('/settings')}
-            aria-label="Open profile settings"
+            style={{ gap: '10px' }}
           >
             <span className="avatar">
-              {session.role.slice(0, 2).toUpperCase()}
+              {session.role
+                .slice(0, 2)
+                .toUpperCase()}
             </span>
 
             <span className="profile-text">
               <strong>
                 {session.role.replaceAll('_', ' ')}
               </strong>
-
               <small>{session.email}</small>
             </span>
 
-            <Icon name="chevron" size={14} />
-          </button>
+            <button
+              className="icon-button"
+              onClick={() => {
+                clearAuthSession()
+                onNavigate('/login')
+                window.location.reload()
+              }}
+              title="Logout"
+            >
+              Logout
+            </button>
+          </div>
         )}
       </div>
     </header>

@@ -3,7 +3,6 @@ import type { Project, ProjectDraft } from '../types'
 import { getAuthSession } from './authService'
 import { normalizeLocation } from './locationService'
 
-const PROJECTS_KEY = 'lai-project-records'
 const DRAFT_KEY = 'lai-project-draft'
 const DRAFT_SAVED_AT_KEY = 'lai-project-draft-saved-at'
 const baseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
@@ -29,56 +28,69 @@ function mapBackendProject(value: Record<string, unknown>): Project {
     compensationProgress: 0,
     possessionProgress: 0,
     lastUpdated: String(value.created_at ?? new Date().toISOString()),
-    description: value.description ? String(value.description) : undefined,
-    monitoringStatus: value.status === 'archived' ? 'ARCHIVED' : 'ACTIVE',
+    description: value.description
+      ? String(value.description)
+      : undefined,
+    monitoringStatus:
+      value.status === 'archived'
+        ? 'ARCHIVED'
+        : 'ACTIVE',
     isDemo: Boolean(value.is_demo),
   }
 }
 
-async function getBackendProjects(): Promise<Project[] | null> {
+async function getBackendProjects(): Promise<Project[]> {
   const session = getAuthSession()
-  if (!session) return null
-  const response = await fetch(`${baseUrl}/projects`, { headers: { Authorization: `Bearer ${session.accessToken}` } })
-  if (!response.ok) return null
-  const body = await response.json() as Record<string, unknown>[]
+
+  if (!session) throw new Error('Please login first.')
+
+  const response = await fetch(`${baseUrl}/projects`, {
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+    },
+  })
+
+  if (!response.ok)
+    throw new Error('Unable to load projects.')
+
+  const body =
+    (await response.json()) as Record<string, unknown>[]
+
   return body.map(mapBackendProject)
 }
 
-function readStoredProjects(): Project[] {
-  try {
-    const stored = localStorage.getItem(PROJECTS_KEY)
-    return stored ? JSON.parse(stored) as Project[] : []
-  } catch {
-    return []
-  }
-}
-
-function readAllProjects(): Project[] {
-  return [...demoProjects, ...readStoredProjects()].map(project => {
-    const location = normalizeLocation(project.state, project.district)
-    return { ...project, stateId: project.stateId ?? location.stateId, districtId: project.districtId ?? location.districtId }
-  })
-}
-
 export async function getProjects(): Promise<Project[]> {
-  const backendProjects = await getBackendProjects()
-  if (backendProjects) return backendProjects.filter(project => project.monitoringStatus !== 'ARCHIVED')
-  return Promise.resolve(readAllProjects().filter(project => project.monitoringStatus !== 'ARCHIVED'))
+  const projects = await getBackendProjects()
+
+  return projects.filter(
+    p => p.monitoringStatus !== 'ARCHIVED',
+  )
 }
 
-export async function getProjectById(id: string): Promise<Project | undefined> {
+export async function getProjectById(
+  id: string,
+): Promise<Project | undefined> {
   const session = getAuthSession()
-  if (session && /^\d+$/.test(id)) {
-    const response = await fetch(`${baseUrl}/projects/${id}`, { headers: { Authorization: `Bearer ${session.accessToken}` } })
-    if (response.ok) return mapBackendProject(await response.json() as Record<string, unknown>)
-  }
-  return readAllProjects().find(project => project.id === id)
+
+  if (!session) return undefined
+
+  const response = await fetch(`${baseUrl}/projects/${id}`, {
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+    },
+  })
+
+  if (!response.ok) return undefined
+
+  return mapBackendProject(
+    (await response.json()) as Record<string, unknown>,
+  )
 }
 
 export function getProjectDraft(): ProjectDraft | null {
   try {
     const stored = localStorage.getItem(DRAFT_KEY)
-    return stored ? JSON.parse(stored) as ProjectDraft : null
+    return stored ? (JSON.parse(stored) as ProjectDraft) : null
   } catch {
     return null
   }
@@ -90,7 +102,10 @@ export function getDraftSavedAt(): string | null {
 
 export function saveProjectDraft(draft: ProjectDraft): void {
   localStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
-  localStorage.setItem(DRAFT_SAVED_AT_KEY, new Date().toISOString())
+  localStorage.setItem(
+    DRAFT_SAVED_AT_KEY,
+    new Date().toISOString(),
+  )
 }
 
 export function clearProjectDraft(): void {
@@ -98,44 +113,118 @@ export function clearProjectDraft(): void {
   localStorage.removeItem(DRAFT_SAVED_AT_KEY)
 }
 
-export async function saveProject(project: Project): Promise<Project> {
-  let savedProject = project
+export async function saveProject(
+  project: Project,
+): Promise<Project> {
   const session = getAuthSession()
-  if (session) {
-    const response = await fetch(`${baseUrl}/projects`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
-      body: JSON.stringify({
-        name: project.name, description: project.description, latitude: project.latitude, longitude: project.longitude,
-        state: project.state, state_id: project.stateId, district: project.district, district_id: project.districtId,
-        project_type: project.projectType, land_area: project.landArea, affected_families: project.affectedFamilies,
-        acquisition_stage: project.acquisitionStage, is_demo: project.isDemo ?? true,
-      }),
-    })
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}))
-      throw new Error(body.detail?.message ?? 'Project could not be stored by the backend.')
-    }
-    const backendProject = mapBackendProject(await response.json() as Record<string, unknown>)
-    savedProject = { ...project, id: backendProject.id }
+
+  if (!session) throw new Error('Please login first.')
+
+  const location = normalizeLocation(
+    project.state,
+    project.district,
+  )
+
+  const response = await fetch(`${baseUrl}/projects`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.accessToken}`,
+    },
+    body: JSON.stringify({
+      name: project.name,
+      description: project.description,
+      latitude: project.latitude,
+      longitude: project.longitude,
+      state: project.state,
+      state_id: project.stateId ?? location.stateId,
+      district: project.district,
+      district_id: project.districtId ?? location.districtId,
+      project_type: project.projectType,
+      land_area: project.landArea,
+      affected_families: project.affectedFamilies,
+      acquisition_stage: project.acquisitionStage,
+      is_demo: false,
+    }),
+  })
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}))
+    throw new Error(
+      body.detail?.message ?? 'Database save failed.',
+    )
   }
-  const existing = readStoredProjects().filter(item => item.id !== savedProject.id && item.id !== project.id)
-  localStorage.setItem(PROJECTS_KEY, JSON.stringify([...existing, savedProject]))
+
   clearProjectDraft()
-  return Promise.resolve(savedProject)
+
+  return mapBackendProject(
+    (await response.json()) as Record<string, unknown>,
+  )
 }
 
-export async function updateProject(id: string, project: Project): Promise<Project> {
-  return saveProject({ ...project, id, lastUpdated: new Date().toISOString() })
+export async function updateProject(
+  id: string,
+  project: Project,
+): Promise<Project> {
+  const session = getAuthSession()
+
+  if (!session) throw new Error('Please login first.')
+
+  const response = await fetch(`${baseUrl}/projects/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.accessToken}`,
+    },
+    body: JSON.stringify({
+      name: project.name,
+      description: project.description,
+      latitude: project.latitude,
+      longitude: project.longitude,
+      state: project.state,
+      district: project.district,
+      project_type: project.projectType,
+      land_area: project.landArea,
+      affected_families: project.affectedFamilies,
+      acquisition_stage: project.acquisitionStage,
+    }),
+  })
+
+  if (!response.ok)
+    throw new Error('Update failed.')
+
+  return mapBackendProject(
+    (await response.json()) as Record<string, unknown>,
+  )
 }
 
-export async function archiveProject(id: string): Promise<void> {
-  const project = await getProjectById(id)
-  if (project) await saveProject({ ...project, monitoringStatus: 'ARCHIVED', lastUpdated: new Date().toISOString() })
+export async function archiveProject(
+  id: string,
+): Promise<void> {
+  const session = getAuthSession()
+
+  if (!session) return
+
+  await fetch(`${baseUrl}/projects/${id}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+    },
+  })
 }
 
-export async function searchProjects(query: string): Promise<Project[]> {
-  const normalized = query.trim().toLowerCase()
-  if (!normalized) return getProjects()
-  return (await getProjects()).filter(project => `${project.id} ${project.name} ${project.state} ${project.district}`.toLowerCase().includes(normalized))
+export async function searchProjects(
+  query: string,
+): Promise<Project[]> {
+  const normalized = query.toLowerCase().trim()
+
+  const projects = await getProjects()
+
+  if (!normalized) return projects
+
+  return projects.filter(project =>
+    `${project.id} ${project.name} ${project.state} ${project.district}`
+      .toLowerCase()
+      .includes(normalized),
+  )
 }
