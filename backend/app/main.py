@@ -5,8 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
 
 from app.api.v1 import router as api_router
-from app.config.database import Base, engine
+from app.config.database import Base, engine, SessionLocal
 from app.config.settings import get_settings
+from app.seeders.auth_seed import seed_bootstrap_admin
 
 # Import models so SQLAlchemy registers them
 from app.models.project import Project
@@ -28,6 +29,12 @@ async def lifespan(app: FastAPI):
     if "details" not in {column["name"] for column in inspect(engine).get_columns("projects")}:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE projects ADD COLUMN details JSON"))
+    if settings.bootstrap_admin_password:
+        db = SessionLocal()
+        try:
+            seed_bootstrap_admin(db, settings.bootstrap_admin_password)
+        finally:
+            db.close()
     yield
 
 

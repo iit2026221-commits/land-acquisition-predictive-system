@@ -24,3 +24,16 @@ def seed_demo_users(db: Session) -> None:
             user.role = role
             user.hashed_password = hash_password(password)
     db.commit()
+
+
+def seed_bootstrap_admin(db: Session, password: str) -> None:
+    """Create the first admin only when the deployment supplies a secret."""
+    user = db.query(User).filter((User.username == "admin") | (User.email == "admin@landiq.demo")).first()
+    if not user:
+        db.add(User(
+            username="admin",
+            email="admin@landiq.demo",
+            role="system_administrator",
+            hashed_password=hash_password(password),
+        ))
+        db.commit()

@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     # Authentication
     secret_key: str = "landiq-super-secret-key-2026"
     access_token_expire_minutes: int = 60
+    # Optional bootstrap secret for a first production administrator.
+    # Never fall back to a known password in production.
+    bootstrap_admin_password: str | None = None
 
     # Frontend
     cors_origins: str = (
