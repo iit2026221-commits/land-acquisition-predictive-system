@@ -8,7 +8,11 @@ const DRAFT_SAVED_AT_KEY = 'lai-project-draft-saved-at'
 const baseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
 
 function mapBackendProject(value: Record<string, unknown>): Project {
+  const details = (value.details && typeof value.details === 'object'
+    ? value.details
+    : {}) as Partial<Project>
   return {
+    ...details,
     id: String(value.id),
     name: String(value.name ?? ''),
     state: String(value.state ?? ''),
@@ -145,6 +149,7 @@ export async function saveProject(
       affected_families: project.affectedFamilies,
       acquisition_stage: project.acquisitionStage,
       is_demo: false,
+      details: project,
     }),
   })
 
@@ -187,6 +192,7 @@ export async function updateProject(
       land_area: project.landArea,
       affected_families: project.affectedFamilies,
       acquisition_stage: project.acquisitionStage,
+      details: project,
     }),
   })
 

@@ -15,6 +15,7 @@ class ProjectCreate(BaseModel):
     affected_families: int | None = Field(default=None, ge=0)
     acquisition_stage: str | None = None
     is_demo: bool = True
+    details: dict | None = None
 
 
 class ProjectResponse(ProjectCreate):

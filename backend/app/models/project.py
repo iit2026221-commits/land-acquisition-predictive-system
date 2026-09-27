@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, String, Text
+from sqlalchemy import DateTime, Float, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.config.database import Base
@@ -24,4 +24,5 @@ class Project(Base):
     acquisition_stage: Mapped[str | None] = mapped_column(String(100), default=None)
     is_demo: Mapped[bool] = mapped_column(default=True)
     status: Mapped[str] = mapped_column(String(50), default="draft")
+    details: Mapped[dict | None] = mapped_column(JSON, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -78,6 +78,28 @@ def get_project(
     return project
 
 
+@router.put(
+    "/{project_id}",
+    response_model=ProjectResponse,
+)
+def update_project(
+    project_id: int,
+    payload: ProjectCreate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_permission(Permission.PROJECT_UPDATE)),
+) -> Project:
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project was not found.")
+    if not can_access_project(user, project_id, db):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot update this project.")
+    for key, value in payload.model_dump().items():
+        setattr(project, key, value)
+    db.commit()
+    db.refresh(project)
+    return project
+
+
 @router.get(
     "",
     response_model=list[ProjectResponse],
