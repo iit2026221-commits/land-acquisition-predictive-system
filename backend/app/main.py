@@ -8,6 +8,7 @@ from app.api.v1 import router as api_router
 from app.config.database import Base, engine, SessionLocal
 from app.config.settings import get_settings
 from app.seeders.auth_seed import seed_bootstrap_admin
+from app.middleware.request_context import RequestContextMiddleware
 
 # Import models so SQLAlchemy registers them
 from app.models.project import Project
@@ -42,6 +43,8 @@ app = FastAPI(
     title=settings.app_name,
     lifespan=lifespan,
 )
+
+app.add_middleware(RequestContextMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
